@@ -7,6 +7,7 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
+    "start": "node start.js",
     "dev:auth": "cd services/auth-service && npm run dev",
     "dev:chat": "cd services/chat-service && npm run dev",
     "dev:post": "cd services/post-service && npm run dev",
