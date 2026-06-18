@@ -3,7 +3,7 @@ import { BadgeCheck, Heart, Share2, MessageCircle, Pencil, X, Trash2 } from "luc
 import moment from "moment";
 import { useNavigate } from "react-router-dom";
 import EditPostModal from "./EditPostModal";
-import { postApi, reactionApi, commentApi, notificationApi } from "../utils/api";
+import { postApi, reactionApi, commentApi, notificationApi, chatApi, userApi } from "../utils/api";
 import Swal from "sweetalert2";
 import { useSocket } from "../utils/SocketContext";
 
@@ -53,6 +53,7 @@ const PostCard = ({ post, authorProfile, onPostUpdated }) => {
     const [showHiddenComments, setShowHiddenComments] = useState(false);
     const [commentsLoading, setCommentsLoading] = useState(false);
     const [commentsCount, setCommentsCount] = useState(0);
+    const [sharesCount, setSharesCount] = useState(7);
 
     const { notifSocket } = useSocket();
 
@@ -199,6 +200,129 @@ const PostCard = ({ post, authorProfile, onPostUpdated }) => {
             fetchComments();
         } catch (error) {
             console.error("Gagal menambahkan komentar:", error);
+        }
+    };
+
+    const handleShareClick = async (e) => {
+        e.stopPropagation();
+        if (!loggedInUser?.id) return;
+
+        const postLink = `${window.location.origin}/profile/${post.user_id}?highlightPostId=${postId}`;
+
+        const result = await Swal.fire({
+            title: 'Bagikan Postingan',
+            text: 'Pilih cara untuk membagikan postingan ini:',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: '💬 Kirim via Chat',
+            denyButtonText: '🔗 Salin Tautan',
+            showDenyButton: true,
+            denyButtonColor: '#3b82f6',
+            confirmButtonColor: '#10b981',
+            cancelButtonText: 'Batal'
+        });
+
+        if (result.isConfirmed) {
+            // "Kirim via Chat" clicked
+            Swal.fire({
+                title: 'Memuat Teman...',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            try {
+                const [followersRes, followingRes] = await Promise.all([
+                    userApi.get("/user/followers", { params: { user_id: loggedInUser.id } }).catch(err => ({ data: [] })),
+                    userApi.get("/user/following", { params: { user_id: loggedInUser.id } }).catch(err => ({ data: [] }))
+                ]);
+                
+                const followers = followersRes.data || [];
+                const following = followingRes.data || [];
+                
+                // Filter mutual connections
+                const mutual = followers.filter(f => {
+                    const fId = f.id || f._id;
+                    return following.some(fol => (fol.id || fol._id) === fId);
+                });
+
+                if (mutual.length === 0) {
+                    Swal.fire('Info', 'Anda tidak memiliki teman mutual (saling follow) untuk dikirimi pesan.', 'info');
+                    return;
+                }
+
+                // Show select option
+                const inputOptions = {};
+                mutual.forEach(friend => {
+                    const id = friend.id || friend._id;
+                    inputOptions[id] = friend.full_name || friend.username || 'InSight User';
+                });
+
+                const { value: selectedFriendId } = await Swal.fire({
+                    title: 'Pilih Teman',
+                    input: 'select',
+                    inputOptions: inputOptions,
+                    inputPlaceholder: 'Pilih teman untuk dikirimi chat',
+                    showCancelButton: true,
+                    confirmButtonText: 'Kirim',
+                    cancelButtonText: 'Batal',
+                    confirmButtonColor: '#10b981'
+                });
+
+                if (selectedFriendId) {
+                    Swal.fire({
+                        title: 'Mengirim...',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+
+                    const postAuthorName = author.username || 'user';
+                    const msgText = `Menyarankan postingan dari @${postAuthorName}: "${content ? content.substring(0, 60) + '...' : 'Media'}"\n\nLihat postingan: ${postLink}`;
+
+                    await chatApi.post('/chat', {
+                        sender_id: loggedInUser.id,
+                        receiver_id: selectedFriendId,
+                        message_text: msgText
+                    });
+
+                    setSharesCount(prev => prev + 1);
+
+                    Swal.fire({
+                        title: 'Terkirim!',
+                        text: 'Postingan berhasil dibagikan ke chat.',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                }
+            } catch (err) {
+                console.error(err);
+                Swal.fire('Gagal', 'Terjadi kesalahan saat membagikan ke chat.', 'error');
+            }
+        } else if (result.isDenied) {
+            // "Salin Tautan" clicked
+            try {
+                await navigator.clipboard.writeText(postLink);
+                setSharesCount(prev => prev + 1);
+                
+                const Toast = Swal.mixin({
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 2000,
+                    timerProgressBar: true,
+                });
+                Toast.fire({
+                    icon: 'success',
+                    title: 'Tautan postingan berhasil disalin!'
+                });
+            } catch (err) {
+                console.error("Gagal menyalin tautan:", err);
+                Swal.fire('Gagal', 'Tidak dapat menyalin tautan.', 'error');
+            }
         }
     };
 
@@ -604,11 +728,14 @@ const PostCard = ({ post, authorProfile, onPostUpdated }) => {
                     </div>
                     <span className="font-medium">{commentsCount}</span>
                 </div>
-                <div className="flex items-center gap-1.5 cursor-pointer hover:text-green-500 transition-colors group">
+                <div 
+                    onClick={handleShareClick}
+                    className="flex items-center gap-1.5 cursor-pointer hover:text-green-500 transition-colors group"
+                >
                     <div className="p-1.5 rounded-full group-hover:bg-green-50 transition">
                         <Share2 className="w-[18px] h-[18px]"/>
                     </div>
-                    <span className="font-medium">7</span>
+                    <span className="font-medium">{sharesCount}</span>
                 </div>
             </div>
             {showEditModal && (
