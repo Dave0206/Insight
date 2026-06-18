@@ -142,6 +142,29 @@ const Profile = () => {
         }
     }, [posts, location.state]);
 
+    const isFollowing = user?.followers?.some(f => (f.id || f._id) === currentUser?.id);
+
+    const handleFollowToggle = async () => {
+        if (!currentUser?.id || !targetId) return;
+        try {
+            if (isFollowing) {
+                await userApi.post('/user/unfollow', {
+                    follower_id: currentUser.id,
+                    following_id: targetId
+                });
+            } else {
+                await userApi.post('/user/follow', {
+                    follower_id: currentUser.id,
+                    following_id: targetId
+                });
+            }
+            fetchProfileData();
+        } catch (err) {
+            console.error("Gagal follow/unfollow:", err);
+            Swal.fire("Error", "Gagal memproses permintaan follow/unfollow", "error");
+        }
+    };
+
     return user ? (
         <div className='relative h-full overflow-y-scroll bg-gray-50 p-6'>
             <div className='max-w-3xl mx-auto'>
@@ -161,6 +184,8 @@ const Profile = () => {
                     setShowEdit={setShowEdit} 
                     onFollowersClick={() => handleOpenConnectionsModal("followers")}
                     onFollowingClick={() => handleOpenConnectionsModal("following")}
+                    isFollowing={isFollowing}
+                    onFollowToggle={handleFollowToggle}
                 />
               </div>
 

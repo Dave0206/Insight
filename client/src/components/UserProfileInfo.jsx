@@ -2,7 +2,7 @@ import React from "react";
 import { Edit2, MapPin, Calendar, BadgeCheck } from "lucide-react";
 import moment from "moment";
 
-const UserProfileInfo = ({ user, posts, profileId, setShowEdit, onFollowersClick, onFollowingClick }) => {
+const UserProfileInfo = ({ user, posts, profileId, setShowEdit, onFollowersClick, onFollowingClick, isFollowing, onFollowToggle }) => {
     // 1. Ambil data user yang sedang login dari brankas browser
     const storedUser = localStorage.getItem('user');
     const currentUser = storedUser ? JSON.parse(storedUser) : null;
@@ -35,8 +35,15 @@ const UserProfileInfo = ({ user, posts, profileId, setShowEdit, onFollowersClick
                             <span>Edit Profil</span>
                         </button>
                     ) : (
-                        <button className="px-6 py-2 bg-indigo-600 text-white rounded-full font-bold hover:bg-indigo-700 transition shadow-sm cursor-pointer">
-                            Follow
+                        <button 
+                            onClick={onFollowToggle}
+                            className={`px-6 py-2 rounded-full font-bold transition shadow-sm cursor-pointer border ${
+                                isFollowing 
+                                    ? "bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-300" 
+                                    : "bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-600"
+                            }`}
+                        >
+                            {isFollowing ? "Unfollow" : "Follow"}
                         </button>
                     )}
                 </div>
